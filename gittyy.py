@@ -26,7 +26,7 @@ def calculate_profit_loss(prices, initial_investment, volume_percent, fee_percen
     balance = initial_investment * (volume_percent / 100)  # 80% des Anfangsinvestments werden investiert
     position = 0
     transaction_history = []
-    profit_loss = []  # Liste zur Aufzeichnung des Gewinns/Verlusts
+    profit_loss = [initial_investment]  # Beginne mit dem Anfangsinvestitionswert
 
     for i in range(1, len(prices)):
         # Kauf-Signal: Kurze SMA schneidet lange SMA von unten nach oben
@@ -45,8 +45,9 @@ def calculate_profit_loss(prices, initial_investment, volume_percent, fee_percen
             position = 0  # Position schließen
             transaction_history.append(f"Verkauf bei {prices[i]:.2f} USDT, nach Gebühr: {balance:.2f} USDT")
         
-        # Gewinn/Verlust-Berechnung
-        profit_loss.append(balance + (position * prices[i]) if position > 0 else balance)
+        # Gewinn/Verlust-Berechnung für den aktuellen Tag
+        current_balance = balance + (position * prices[i]) if position > 0 else balance
+        profit_loss.append(current_balance)
     
     return transaction_history, profit_loss
 
