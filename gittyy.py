@@ -23,24 +23,27 @@ def calculate_sma(prices, window):
 
 # Gewinn/Verlust-Verlauf berechnen
 def calculate_profit_loss(prices, initial_investment, volume_percent, fee_percent):
-    balance = initial_investment * (volume_percent / 100)
+    balance = initial_investment * (volume_percent / 100)  # 80% des Anfangsinvestments werden investiert
     position = 0
     transaction_history = []
+    
     for i in range(1, len(prices)):
         # Kauf-Signal: Kurze SMA schneidet lange SMA von unten nach oben
         if prices[i] > sma_short[i] and prices[i-1] <= sma_short[i-1] and position == 0:
+            # Kaufe mit 80% des Vermögens
             position = balance / prices[i]
             balance = 0  # Alles wird investiert
             transaction_history.append(f"Kauf bei {prices[i]:.2f} USDT")
         
         # Verkaufs-Signal: Kurze SMA schneidet lange SMA von oben nach unten
         elif prices[i] < sma_short[i] and prices[i-1] >= sma_short[i-1] and position > 0:
+            # Verkaufe die Position
             sell_value = position * prices[i]
-            fee = sell_value * (fee_percent / 100)
+            fee = sell_value * (fee_percent / 100)  # Berechnung der Gebühr auf den Verkauf
             balance = sell_value - fee
-            transaction_history.append(f"Verkauf bei {prices[i]:.2f} USDT, nach Gebühr: {balance:.2f} USDT")
             position = 0  # Position schließen
-            
+            transaction_history.append(f"Verkauf bei {prices[i]:.2f} USDT, nach Gebühr: {balance:.2f} USDT")
+    
     return transaction_history, balance
 
 # Streamlit-Oberfläche
@@ -52,7 +55,7 @@ lookback = st.slider('Wähle die Anzahl der Minuten für den Rückblick', min_va
 short_window = st.slider('Wähle den Zeitraum für die kurze SMA (in Minuten)', min_value=1, max_value=50, value=1)
 long_window = st.slider('Wähle den Zeitraum für die lange SMA (in Minuten)', min_value=5, max_value=100, value=29)
 fee_percent = st.slider('Wähle den Verkaufsgebührenprozentsatz (%)', min_value=0.0, max_value=5.0, value=0.1, step=0.01)
-initial_investment = st.number_input('Anfangsinvestition (in USDT)', min_value=100.0, max_value=10000.0, value=1000.0)
+initial_investment = 100.0  # Anfangsinvestition ist immer 100 USDT
 volume_percent = st.slider('Wähle den Prozentsatz des investierten Volumens (%)', min_value=0.0, max_value=100.0, value=80.0, step=1.0)
 
 # Hole Marktdaten von Yahoo Finance
