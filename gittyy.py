@@ -27,16 +27,20 @@ def calculate_profit_loss(prices, initial_investment, volume_percent, fee_percen
     position = 0
     transaction_history = []
     for i in range(1, len(prices)):
-        if prices[i] > prices[i-1]:
-            if position == 0:
-                position = balance / prices[i]
-                balance = 0
-        elif prices[i] < prices[i-1] and position > 0:
+        # Kauf-Signal: Kurze SMA schneidet lange SMA von unten nach oben
+        if prices[i] > sma_short[i] and prices[i-1] <= sma_short[i-1] and position == 0:
+            position = balance / prices[i]
+            balance = 0  # Alles wird investiert
+            transaction_history.append(f"Kauf bei {prices[i]:.2f} USDT")
+        
+        # Verkaufs-Signal: Kurze SMA schneidet lange SMA von oben nach unten
+        elif prices[i] < sma_short[i] and prices[i-1] >= sma_short[i-1] and position > 0:
             sell_value = position * prices[i]
             fee = sell_value * (fee_percent / 100)
             balance = sell_value - fee
-            transaction_history.append(balance - initial_investment)
-            position = 0
+            transaction_history.append(f"Verkauf bei {prices[i]:.2f} USDT, nach Gebühr: {balance:.2f} USDT")
+            position = 0  # Position schließen
+            
     return transaction_history, balance
 
 # Streamlit-Oberfläche
@@ -62,7 +66,7 @@ if data is not None:
     sma_long = calculate_sma(prices, long_window)
 
     # Berechne Gewinn/Verlust-Verlauf
-    profit_loss_history, final_balance = calculate_profit_loss(prices, initial_investment, volume_percent, fee_percent)
+    transaction_history, final_balance = calculate_profit_loss(prices, initial_investment, volume_percent, fee_percent)
 
     # Zoom-Funktion
     zoom_period = st.slider('Wähle den angezeigten Zeitraum (Minuten)', min_value=10, max_value=lookback, value=lookback)
@@ -79,18 +83,18 @@ if data is not None:
     # Ergebnis der Simulation (Gewinn/Verlust)
     st.subheader('Simulationsergebnis')
     st.write(f'Endguthaben nach Simulation: {final_balance:.2f} USDT')
-    if len(profit_loss_history) > 0:
-        st.write(f'Gewinn/Verlust bei den letzten Transaktionen: {profit_loss_history[-1]:.2f} USDT')
+    st.write(f'Letzte Transaktionen: {transaction_history[-5:] if len(transaction_history) > 5 else transaction_history}')
 
     # Gewinn/Verlust-Plot
-    st.subheader('Gewinn/Verlust-Verlauf')
+    st.subheader('Simulation der Handelsstrategie')
     fig, ax = plt.subplots(figsize=(10, 4))
-    ax.plot(profit_loss_history, label='Gewinn/Verlust', color='orange')
-    ax.axhline(0, color='black', linestyle='--')
-    ax.set_ylabel('Gewinn/Verlust in USDT')
-    ax.set_xlabel('Anzahl der Trades')
+    ax.plot(prices, label='Preis', color='blue')
+    ax.plot(sma_short, label=f'SMA {short_window} Min', color='green')
+    ax.plot(sma_long, label=f'SMA {long_window} Min', color='red')
+    ax.set_ylabel('Preis in USDT')
+    ax.set_xlabel('Zeit')
     ax.legend()
     st.pyplot(fig)
-    
+
 else:
     st.error("Keine Daten verfügbar. Überprüfe deine Internetverbindung.")
