@@ -48,7 +48,7 @@ lookback = st.slider('Wähle die Anzahl der Minuten für den Rückblick', min_va
 short_window = st.slider('Wähle den Zeitraum für die kurze SMA (in Minuten)', min_value=1, max_value=50, value=1)
 long_window = st.slider('Wähle den Zeitraum für die lange SMA (in Minuten)', min_value=5, max_value=100, value=29)
 fee_percent = st.slider('Wähle den Verkaufsgebührenprozentsatz (%)', min_value=0.0, max_value=5.0, value=0.1, step=0.01)
-initial_investment = st.number_input('Anfangsinvestition (in Euro)', min_value=100.0, max_value=10000.0, value=1000.0)
+initial_investment = st.number_input('Anfangsinvestition (in USDT)', min_value=100.0, max_value=10000.0, value=1000.0)
 volume_percent = st.slider('Wähle den Prozentsatz des investierten Volumens (%)', min_value=0.0, max_value=100.0, value=80.0, step=1.0)
 
 # Hole Marktdaten von Yahoo Finance
@@ -78,16 +78,16 @@ if data is not None:
 
     # Ergebnis der Simulation (Gewinn/Verlust)
     st.subheader('Simulationsergebnis')
-    st.write(f'Endguthaben nach Simulation: {final_balance:.2f} Euro')
+    st.write(f'Endguthaben nach Simulation: {final_balance:.2f} USDT')
     if len(profit_loss_history) > 0:
-        st.write(f'Gewinn/Verlust bei den letzten Transaktionen: {profit_loss_history[-1]:.2f} Euro')
+        st.write(f'Gewinn/Verlust bei den letzten Transaktionen: {profit_loss_history[-1]:.2f} USDT')
 
     # Gewinn/Verlust-Plot
     st.subheader('Gewinn/Verlust-Verlauf')
     fig, ax = plt.subplots(figsize=(10, 4))
     ax.plot(profit_loss_history, label='Gewinn/Verlust', color='orange')
     ax.axhline(0, color='black', linestyle='--')
-    ax.set_ylabel('Gewinn/Verlust in Euro')
+    ax.set_ylabel('Gewinn/Verlust in USDT')
     ax.set_xlabel('Anzahl der Trades')
     ax.legend()
     st.pyplot(fig)
