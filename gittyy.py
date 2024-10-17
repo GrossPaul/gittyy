@@ -67,32 +67,30 @@ def plot_data(data, patterns, show_risk):
     st.pyplot(fig)
 
 # Daten von Yahoo Finance laden
-def load_data(ticker, start, end):
-    data = yf.download(ticker, start=start, end=end)
+def load_data(ticker, period='5d', interval='1m'):
+    data = yf.download(ticker, period=period, interval=interval)
     return data
 
 # Hauptprogramm für das Streamlit-Dashboard
 def main():
-    st.title("Finanzanalyse: Candlestick-Muster, SMAs und Risikobewertung")
+    st.title("Finanzanalyse: BTC/ETH Candlestick-Muster, SMAs und Risikobewertung")
 
     # Benutzeroptionen
-    ticker = st.sidebar.text_input("Wähle einen Ticker (z.B. AAPL, MSFT)", value="AAPL")
-    start = st.sidebar.date_input("Startdatum", pd.to_datetime('2022-01-01'))
-    end = st.sidebar.date_input("Enddatum", pd.to_datetime('2023-01-01'))
+    ticker = st.sidebar.selectbox("Wähle einen Ticker (BTC-USD oder ETH-USD)", options=["BTC-USD", "ETH-USD"])
     
-    short_sma = st.sidebar.slider("SMA Kurz Fenster", 5, 50, 20)
-    long_sma = st.sidebar.slider("SMA Lang Fenster", 50, 200, 100)
+    sma_short_minutes = st.sidebar.slider("SMA Kurz (Minuten)", 1, 10, 5)
+    sma_long_minutes = st.sidebar.slider("SMA Lang (Minuten)", 10, 60, 10)
     show_risk = st.sidebar.checkbox("Risikobewertung anzeigen")
-    
-    # Daten laden
-    data = load_data(ticker, start, end)
+
+    # Daten laden (letzte 5 Tage, 1-Minuten-Intervall)
+    data = load_data(ticker, period="5d", interval="1m")
 
     if data is not None and not data.empty:
         # Candlestick-Muster erkennen
         patterns = detect_candlestick_patterns(data)
         
         # SMA berechnen
-        data = calculate_sma(data, short_sma, long_sma)
+        data = calculate_sma(data, sma_short_minutes, sma_long_minutes)
 
         # Bollinger Bands berechnen
         data = calculate_bollinger_bands(data)
@@ -102,7 +100,7 @@ def main():
             data = calculate_volatility(data)
 
         # Daten anzeigen
-        st.write(f"**Daten für {ticker}**")
+        st.write(f"**Daten für {ticker} (Letzte 5 Tage, 1-Minuten-Intervall)**")
         st.write(data.tail())
 
         # Visualisierung
