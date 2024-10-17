@@ -4,65 +4,74 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-# SMA Berechnung
-def calculate_sma(data, short_window, long_window):
+# Funktion zur Berechnung von SMA und Risiko
+def calculate_sma_risk(data, short_window, long_window):
     data['SMA_Short'] = data['Close'].rolling(window=short_window).mean()
     data['SMA_Long'] = data['Close'].rolling(window=long_window).mean()
+    data['Volatility'] = data['Close'].pct_change().rolling(window=10).std() * np.sqrt(252)
     return data
 
-# Candlestick-Muster-Erkennung (Einfaches Beispiel für Doji)
-def detect_candlestick_patterns(data):
-    patterns = []
+# Simulierte Handelsstrategie auf Basis von Risiko und Kapital
+def simulate_trading(data, start_capital, risk_threshold):
+    capital = start_capital
+    positions = 0  # Anzahl der gekauften Einheiten
+    trade_history = []
+
     for i in range(1, len(data)):
-        open_price = data['Open'][i]
-        close_price = data['Close'][i]
-        high_price = data['High'][i]
-        low_price = data['Low'][i]
+        current_price = data['Close'][i]
+        volatility = data['Volatility'][i]
+        signal = None
 
-        # Doji-Erkennung (als einfaches Beispiel)
-        if abs(close_price - open_price) / (high_price - low_price) < 0.1:
-            patterns.append("Doji")
-        else:
-            patterns.append("None")
-    return patterns
+        # Kaufentscheidung bei niedrigem Risiko
+        if volatility < risk_threshold and positions == 0:
+            positions = capital / current_price
+            capital = 0
+            signal = "Buy"
 
-# Volatilitätsberechnung (Risikoanalyse)
-def calculate_volatility(data, window=10):
-    data['Volatility'] = data['Close'].pct_change().rolling(window=window).std() * np.sqrt(252)
-    return data
+        # Verkaufsentscheidung bei hohem Risiko oder Gewinnmitnahme
+        elif volatility > risk_threshold and positions > 0:
+            capital = positions * current_price
+            positions = 0
+            signal = "Sell"
 
-# Bollinger Bands als weiteres Risiko-Tool
-def calculate_bollinger_bands(data, window=20):
-    data['Rolling_Mean'] = data['Close'].rolling(window=window).mean()
-    data['Bollinger_Upper'] = data['Rolling_Mean'] + (data['Close'].rolling(window=window).std() * 2)
-    data['Bollinger_Lower'] = data['Rolling_Mean'] - (data['Close'].rolling(window=window).std() * 2)
-    return data
+        # Speichere den Kapitalverlauf
+        trade_history.append({
+            "Time": data.index[i],
+            "Price": current_price,
+            "Capital": capital + positions * current_price,  # Kapitalwert inklusive offener Positionen
+            "Signal": signal
+        })
 
-# Plot-Funktion für Candlesticks, SMAs und Risikodarstellung
-def plot_data(data, patterns, show_risk):
+    return pd.DataFrame(trade_history)
+
+# Plot Funktion für den Handelsverlauf
+def plot_trading(data, trade_history):
     fig, ax = plt.subplots(figsize=(10, 6))
 
-    # Candlestick-Kursverlauf
+    # Kursverlauf
     ax.plot(data['Close'], label='Kursverlauf', color='blue')
 
-    # Candlestick-Muster farblich hervorheben (Doji als Beispiel)
-    for i, pattern in enumerate(patterns):
-        if pattern == 'Doji':
-            ax.scatter(data.index[i], data['Close'][i], color='red', label='Doji' if i == 0 else "", s=100)
+    # Kauf-/Verkaufssignale
+    buy_signals = trade_history[trade_history['Signal'] == "Buy"]
+    sell_signals = trade_history[trade_history['Signal'] == "Sell"]
 
-    # SMA-Kurven (Short und Long)
+    ax.scatter(buy_signals['Time'], buy_signals['Price'], color='green', marker='^', label='Kauf')
+    ax.scatter(sell_signals['Time'], sell_signals['Price'], color='red', marker='v', label='Verkauf')
+
+    # SMA Kurven
     ax.plot(data['SMA_Short'], label='SMA Kurz', color='green', linestyle='--')
     ax.plot(data['SMA_Long'], label='SMA Lang', color='orange', linestyle='--')
 
-    # Bollinger Bands
-    ax.plot(data['Bollinger_Upper'], label='Bollinger Oberes Band', color='grey', linestyle='-.')
-    ax.plot(data['Bollinger_Lower'], label='Bollinger Unteres Band', color='grey', linestyle='-.')
+    ax.legend()
+    st.pyplot(fig)
 
-    # Risikofarben (Volatilität)
-    if show_risk:
-        risk_colors = np.where(data['Volatility'] > data['Volatility'].mean(), 'red', 'green')
-        ax.scatter(data.index, data['Close'], c=risk_colors, alpha=0.5, label='Risikobewertung')
-
+# Plot für Kapitalverlauf
+def plot_capital(trade_history):
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    ax.plot(trade_history['Time'], trade_history['Capital'], label='Kapitalverlauf', color='purple')
+    ax.set_ylabel("Kapital in €")
+    ax.set_xlabel("Zeit")
     ax.legend()
     st.pyplot(fig)
 
@@ -73,38 +82,36 @@ def load_data(ticker, period='5d', interval='1m'):
 
 # Hauptprogramm für das Streamlit-Dashboard
 def main():
-    st.title("Finanzanalyse: BTC/ETH Candlestick-Muster, SMAs und Risikobewertung")
+    st.title("BTC/ETH Handelsstrategie mit Risikomanagement und Kapitalverlauf")
 
     # Benutzeroptionen
     ticker = st.sidebar.selectbox("Wähle einen Ticker (BTC-USD oder ETH-USD)", options=["BTC-USD", "ETH-USD"])
-    
     sma_short_minutes = st.sidebar.slider("SMA Kurz (Minuten)", 1, 10, 5)
     sma_long_minutes = st.sidebar.slider("SMA Lang (Minuten)", 10, 60, 10)
-    show_risk = st.sidebar.checkbox("Risikobewertung anzeigen")
+    risk_threshold = st.sidebar.slider("Risikoschwelle (Volatilität)", 0.01, 0.1, 0.02)
+    start_capital = st.sidebar.number_input("Startkapital (€)", value=50, step=10)
 
     # Daten laden (letzte 5 Tage, 1-Minuten-Intervall)
     data = load_data(ticker, period="5d", interval="1m")
 
     if data is not None and not data.empty:
-        # Candlestick-Muster erkennen
-        patterns = detect_candlestick_patterns(data)
-        
-        # SMA berechnen
-        data = calculate_sma(data, sma_short_minutes, sma_long_minutes)
+        # SMA und Risiko berechnen
+        data = calculate_sma_risk(data, sma_short_minutes, sma_long_minutes)
 
-        # Bollinger Bands berechnen
-        data = calculate_bollinger_bands(data)
+        # Simulierte Handelsstrategie
+        trade_history = simulate_trading(data, start_capital, risk_threshold)
 
-        # Volatilität für Risikobewertung
-        if show_risk:
-            data = calculate_volatility(data)
+        # Kurs- und Handelsverlauf visualisieren
+        st.write(f"**Kursverlauf und Handelsstrategie für {ticker}**")
+        plot_trading(data, trade_history)
 
-        # Daten anzeigen
-        st.write(f"**Daten für {ticker} (Letzte 5 Tage, 1-Minuten-Intervall)**")
-        st.write(data.tail())
+        # Kapitalverlauf anzeigen
+        st.write(f"**Kapitalverlauf für {ticker} (Startkapital: {start_capital} €)**")
+        plot_capital(trade_history)
 
-        # Visualisierung
-        plot_data(data, patterns, show_risk)
+        # Tabelle mit Handelssignalen anzeigen
+        st.write("**Handelshistorie**")
+        st.write(trade_history)
     else:
         st.write("Keine Daten gefunden. Bitte überprüfe die Eingaben.")
 
