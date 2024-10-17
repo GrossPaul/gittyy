@@ -1,95 +1,114 @@
 import streamlit as st
+import yfinance as yf
 import pandas as pd
-import requests
-import datetime
+import numpy as np
+import matplotlib.pyplot as plt
 
-# Binance API Data Retrieval (No Authentication)
-def get_binance_data(symbol):
-    url = f"https://api.binance.com/api/v3/ticker/24hr?symbol={symbol}"
-    response = requests.get(url)
-    if response.status_code == 200:
-        data = response.json()
-        df = pd.DataFrame([{
-            'Close': float(data['lastPrice']),
-            'Volume': float(data['volume']),
-            'High': float(data['highPrice']),
-            'Low': float(data['lowPrice']),
-        }], index=[pd.to_datetime(datetime.datetime.now())])
-        return df
+# SMA Berechnung
+def calculate_sma(data, short_window, long_window):
+    data['SMA_Short'] = data['Close'].rolling(window=short_window).mean()
+    data['SMA_Long'] = data['Close'].rolling(window=long_window).mean()
+    return data
+
+# Candlestick-Muster-Erkennung (Einfaches Beispiel für Doji)
+def detect_candlestick_patterns(data):
+    patterns = []
+    for i in range(1, len(data)):
+        open_price = data['Open'][i]
+        close_price = data['Close'][i]
+        high_price = data['High'][i]
+        low_price = data['Low'][i]
+
+        # Doji-Erkennung (als einfaches Beispiel)
+        if abs(close_price - open_price) / (high_price - low_price) < 0.1:
+            patterns.append("Doji")
+        else:
+            patterns.append("None")
+    return patterns
+
+# Volatilitätsberechnung (Risikoanalyse)
+def calculate_volatility(data, window=10):
+    data['Volatility'] = data['Close'].pct_change().rolling(window=window).std() * np.sqrt(252)
+    return data
+
+# Bollinger Bands als weiteres Risiko-Tool
+def calculate_bollinger_bands(data, window=20):
+    data['Rolling_Mean'] = data['Close'].rolling(window=window).mean()
+    data['Bollinger_Upper'] = data['Rolling_Mean'] + (data['Close'].rolling(window=window).std() * 2)
+    data['Bollinger_Lower'] = data['Rolling_Mean'] - (data['Close'].rolling(window=window).std() * 2)
+    return data
+
+# Plot-Funktion für Candlesticks, SMAs und Risikodarstellung
+def plot_data(data, patterns, show_risk):
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    # Candlestick-Kursverlauf
+    ax.plot(data['Close'], label='Kursverlauf', color='blue')
+
+    # Candlestick-Muster farblich hervorheben (Doji als Beispiel)
+    for i, pattern in enumerate(patterns):
+        if pattern == 'Doji':
+            ax.scatter(data.index[i], data['Close'][i], color='red', label='Doji' if i == 0 else "", s=100)
+
+    # SMA-Kurven (Short und Long)
+    ax.plot(data['SMA_Short'], label='SMA Kurz', color='green', linestyle='--')
+    ax.plot(data['SMA_Long'], label='SMA Lang', color='orange', linestyle='--')
+
+    # Bollinger Bands
+    ax.plot(data['Bollinger_Upper'], label='Bollinger Oberes Band', color='grey', linestyle='-.')
+    ax.plot(data['Bollinger_Lower'], label='Bollinger Unteres Band', color='grey', linestyle='-.')
+
+    # Risikofarben (Volatilität)
+    if show_risk:
+        risk_colors = np.where(data['Volatility'] > data['Volatility'].mean(), 'red', 'green')
+        ax.scatter(data.index, data['Close'], c=risk_colors, alpha=0.5, label='Risikobewertung')
+
+    ax.legend()
+    st.pyplot(fig)
+
+# Daten von Yahoo Finance laden
+def load_data(ticker, start, end):
+    data = yf.download(ticker, start=start, end=end)
+    return data
+
+# Hauptprogramm für das Streamlit-Dashboard
+def main():
+    st.title("Finanzanalyse: Candlestick-Muster, SMAs und Risikobewertung")
+
+    # Benutzeroptionen
+    ticker = st.sidebar.text_input("Wähle einen Ticker (z.B. AAPL, MSFT)", value="AAPL")
+    start = st.sidebar.date_input("Startdatum", pd.to_datetime('2022-01-01'))
+    end = st.sidebar.date_input("Enddatum", pd.to_datetime('2023-01-01'))
+    
+    short_sma = st.sidebar.slider("SMA Kurz Fenster", 5, 50, 20)
+    long_sma = st.sidebar.slider("SMA Lang Fenster", 50, 200, 100)
+    show_risk = st.sidebar.checkbox("Risikobewertung anzeigen")
+    
+    # Daten laden
+    data = load_data(ticker, start, end)
+
+    if data is not None and not data.empty:
+        # Candlestick-Muster erkennen
+        patterns = detect_candlestick_patterns(data)
+        
+        # SMA berechnen
+        data = calculate_sma(data, short_sma, long_sma)
+
+        # Bollinger Bands berechnen
+        data = calculate_bollinger_bands(data)
+
+        # Volatilität für Risikobewertung
+        if show_risk:
+            data = calculate_volatility(data)
+
+        # Daten anzeigen
+        st.write(f"**Daten für {ticker}**")
+        st.write(data.tail())
+
+        # Visualisierung
+        plot_data(data, patterns, show_risk)
     else:
-        st.error(f"Binance API Fehler: {response.status_code}")
-        return pd.DataFrame()  # Leeres DataFrame im Fehlerfall
+        st.write("Keine Daten gefunden. Bitte überprüfe die Eingaben.")
 
-# Coinbase Pro API Data Retrieval (No Authentication)
-def get_coinbase_data(symbol):
-    url = f"https://api.pro.coinbase.com/products/{symbol}/ticker"
-    response = requests.get(url)
-    if response.status_code == 200:
-        data = response.json()
-        df = pd.DataFrame([{
-            'Close': float(data['price']),
-            'Volume': float(data['volume']),
-            'High': None,  # Coinbase Ticker Endpoint gibt keine High/Low-Werte zurück
-            'Low': None
-        }], index=[pd.to_datetime(datetime.datetime.now())])
-        return df
-    else:
-        st.error(f"Coinbase API Fehler: {response.status_code}")
-        return pd.DataFrame()  # Leeres DataFrame im Fehlerfall
-
-# Yahoo Finance API Data Retrieval
-def get_yahoo_data(symbol):
-    url = f"https://query1.finance.yahoo.com/v7/finance/download/{symbol}?period1=0&period2={int(datetime.datetime.now().timestamp())}&interval=1m&events=history"
-    try:
-        df = pd.read_csv(url)
-        df['Date'] = pd.to_datetime(df['Date'])
-        df.set_index('Date', inplace=True)
-        return df
-    except Exception as e:
-        st.error(f"Yahoo Finance Fehler: {str(e)}")
-        return pd.DataFrame()
-
-# Bollinger-Band-Berechnung
-def bollinger_bands(df, window=120):
-    df['SMA'] = df['Close'].rolling(window).mean()
-    df['STD'] = df['Close'].rolling(window).std()
-    df['Upper Band'] = df['SMA'] + (df['STD'] * 2)
-    df['Lower Band'] = df['SMA'] - (df['STD'] * 2)
-    return df
-
-# App Layout
-st.title('Krypto-Datenanalyse: Bitcoin und mehr')
-
-# Auswahl der Datenquelle
-data_source = st.selectbox("Wähle die Datenquelle:", ["Yahoo Finance", "Binance", "Coinbase Pro"])
-
-# Auswahl des Symbols
-crypto_symbol = st.selectbox("Wähle das Krypto-Symbol:", ["BTC-USD", "ETH-USD", "BNB-USD"])
-
-# Laden der Daten basierend auf der ausgewählten Quelle
-if data_source == "Yahoo Finance":
-    st.write("Using Yahoo Finance data...")
-    df = get_yahoo_data(crypto_symbol)
-elif data_source == "Binance":
-    st.write("Using Binance data...")
-    df = get_binance_data(crypto_symbol.replace("-", ""))
-elif data_source == "Coinbase Pro":
-    st.write("Using Coinbase Pro data...")
-    df = get_coinbase_data(crypto_symbol)
-
-# Überprüfe, ob die Spalte 'Close' im DataFrame vorhanden ist
-if 'Close' not in df.columns:
-    st.error("Die Daten konnten nicht geladen werden.")
-else:
-    # Bollinger-Bänder für die letzten zwei Stunden berechnen
-    df = bollinger_bands(df, window=120)
-
-    # Visualisierung
-    st.line_chart(df[['Close', 'Upper Band', 'Lower Band']])
-
-    # Zeige das Daten-DataFrame
-    st.write("Datenvorschau:")
-    st.dataframe(df)
-
-# Footer
-st.write("Daten werden von Yahoo Finance, Binance und Coinbase Pro abgerufen.")
+if __name__ == '__main__':
+    main()
